@@ -1,0 +1,14 @@
+apiVersion: v1
+appVersion: "latest"
+description: Open implementation of the nginx standard based on firefart/requesttracker
+home: https://bestpractical.com/request-tracker
+keywords:
+- nginx
+maintainers:
+- name: Danilo Nicioka
+  url: https://github.com/danilonicioka/
+name: nginx
+sources:
+- https://github.com/danilonicioka/helm-charts
+type: application
+version: 0.1.1

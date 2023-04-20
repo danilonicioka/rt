@@ -1,0 +1,14 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cron
+  labels:
+    app: {{ template "request-tracker.name" . }}
+    chart: {{ template "request-tracker.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+
+data:
+{{ (.Files.Glob "files/cron/*").AsConfig | indent 2 }}
+...

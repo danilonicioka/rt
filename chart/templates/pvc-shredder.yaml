@@ -1,0 +1,22 @@
+{{- if .Values.cron.persistence.enabled }}
+{{- if not .Values.cron.persistence.shredder.existingClaim }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: shredder
+spec:
+  {{- if .Values.cron.persistence.shredder.storageClass }}
+  storageClassName: {{ .Values.cron.persistence.shredder.storageClass }}
+  {{- end }}
+  accessModes:
+    - ReadWriteOnce
+  {{- if gt .Values.replicaCount 1.0 }}
+    - ReadWriteMany
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.cron.persistence.shredder.storage | default "100Mi" }}
+...
+{{- end }}
+{{- end }}

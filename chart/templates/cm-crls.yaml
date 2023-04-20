@@ -1,0 +1,14 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "request-tracker.fullname" . }}-crls
+  labels:
+    app: {{ template "request-tracker.name" . }}
+    chart: {{ template "request-tracker.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+
+data:
+{{ (.Files.Glob "files/gpg/crls.d/*").AsConfig | indent 2 }}
+...

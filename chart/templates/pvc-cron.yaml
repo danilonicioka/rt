@@ -1,0 +1,22 @@
+{{- if .Values.cron.persistence.enabled }}
+{{- if not .Values.cron.persistence.data.existingClaim }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: cron
+spec:
+  {{- if .Values.cron.persistence.data.storageClass }}
+  storageClassName: {{ .Values.cron.persistence.data.storageClass }}
+  {{- end }}
+  accessModes:
+    - ReadWriteOnce
+  {{- if gt .Values.replicaCount 1.0 }}
+    - ReadWriteMany
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.cron.persistence.data.storage | default "100Mi" }}
+...
+{{- end }}
+{{- end }}

@@ -1,0 +1,217 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name:  cron
+  labels:
+    app: {{ template "request-tracker.name" . }}
+    chart: {{ template "request-tracker.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+{{- if .Values.extraLabels }}
+{{ toYaml .Values.extraLabels | indent 4 }}
+{{- end }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+{{- if .Values.strategy }}
+  strategy:
+{{ toYaml .Values.strategy | indent 4 }}
+{{- end }}
+  selector:
+    matchLabels:
+      app: {{ template "request-tracker.name" . }}
+      release: {{ .Release.Name }}
+  template:
+    metadata: #todo: add cm checksums as annotation
+{{- if .Values.podAnnotations}}
+{{ toYaml .Values.podAnnotations | indent 8}}
+{{- end }}
+      labels:
+        app: {{ template "request-tracker.name" . }}
+        release: {{ .Release.Name }}
+    spec:
+      initContainers:
+      - name: {{ .Chart.Name }}-init-siteconfig
+        image: busybox
+        command: ['sh', '-c', 'cp /siteconfig/* /siteconfigworkingdir']
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        volumeMounts:
+        - name: siteconfig
+          mountPath: /siteconfig
+        - name: siteconfigworkingdir
+          mountPath: /siteconfigworkingdir
+      - name: {{ .Chart.Name }}-init-msmtprc
+        image: busybox
+        command: ['sh', '-c', 'cp /msmtprc/* /msmtprcworkingdir']
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        volumeMounts:
+        - name: msmtprc
+          mountPath: /msmtprc
+        - name: msmtprcworkingdir
+          mountPath: /msmtprcworkingdir
+      - name: {{ .Chart.Name }}-init-msmtp
+        image: busybox
+        command: ['sh', '-c', 'cp /msmtp/* /msmtpworkingdir']
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        volumeMounts:
+        - name: msmtp
+          mountPath: /msmtp
+        - name: msmtpworkingdir
+          mountPath: /msmtpworkingdir
+      - name: {{ .Chart.Name }}-init-getmail
+        image: busybox
+        command: ['sh', '-c', 'cp /getmail/* /getmailworkingdir']
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        volumeMounts:
+        - name: getmail
+          mountPath: /getmail
+        - name: getmailworkingdir
+          mountPath: /getmailworkingdir
+      - name: {{ .Chart.Name }}-init-gpg
+        image: busybox
+        command: ['sh', '-c', 'cp /gpg/* /gpgworkingdir']
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        volumeMounts:
+        - name: gpg
+          mountPath: /gpg
+        - name: gpgworkingdir
+          mountPath: /gpgworkingdir
+      - name: {{ .Chart.Name }}-init-crls
+        image: busybox
+        command: ['sh', '-c', 'cp /crls/* /crlsworkingdir']
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        volumeMounts:
+        - name: crls
+          mountPath: /crls
+        - name: crlsworkingdir
+          mountPath: /crlsworkingdir
+      - name: {{ .Chart.Name }}-init-shredder
+        image: busybox
+        command: ['sh', '-c', 'cp /shredder/* /shredderworkingdir']
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        volumeMounts:
+        - name: shredder
+          mountPath: /shredder
+        - name: shredderworkingdir
+          mountPath: /shredderworkingdir
+      - name: {{ .Chart.Name }}-init-certs
+        image: busybox
+        command: ['sh', '-c', 'cp /certs/* /certsworkingdir']
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        volumeMounts:
+        - name: certs
+          mountPath: /certs
+        - name: certsworkingdir
+          mountPath: /certsworkingdir
+      - name: {{ .Chart.Name }}-init-crontab
+        image: busybox
+        command: ['sh', '-c', 'cp /crontab/* /crontabworkingdir']
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        volumeMounts:
+        - name: crontab
+          mountPath: /crontab
+        - name: crontabworkingdir
+          mountPath: /crontabworkingdir
+      containers:
+        - args:
+            - /usr/sbin/crond
+            - -f
+            - -l
+            - "8"
+          name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          volumeMounts:
+            - name: data-shredder
+              mountPath: /opt/rt5/var/data/RT-Shredder/
+            - name: data
+              mountPath: /cron
+            - name: siteconfigworkingdir
+              mountPath: /custom/siteconfig
+            - name: msmtprcworkingdir
+              mountPath: /custom/msmtp
+            - name: msmtpworkingdir
+              mountPath: /msmtp/
+            - name: getmailworkingdir
+              mountPath: /getmail/
+            - name: certsworkingdir
+              mountPath: /getmail/certs/
+            - name: gpgworkingdir
+              mountPath: /opt/rt5/var/data/gpg/
+            - name: crlsworkingdir
+              mountPath: /opt/rt5/var/data/gpg/crls.d
+            - name: crontabworkingdir
+              mountPath: /var/spool/cron/crontabs/rt/
+            - name: shredderworkingdir
+              mountPath: /custom/shredder
+          securityContext:
+            runAsUser: 0
+          lifecycle:
+            postStart:
+              exec:
+                command: ["/bin/sh", "-c", "cp /custom/siteconfig/RT_SiteConfig.pm /opt/rt5/etc/ ; cp /custom/msmtp/msmtp.conf /etc/msmtprc ; cp /custom/shredder/* /opt/rt5/var/data/RT-Shredder/ ; chmod -R rt 0600 /opt/rt5/var/data/gpg/ ; cp /usr/share/zoneinfo/America/Sao_Paulo /etc/localtime"]
+      restartPolicy: Always
+      volumes:
+        - name: siteconfig
+          secret:
+            secretName: {{ template "request-tracker.fullname" . }}-siteconfig
+        - name: siteconfigworkingdir
+          emptyDir: {}
+        - name: msmtprc
+          secret:
+            secretName: {{ template "request-tracker.fullname" . }}-msmtp
+        - name: msmtprcworkingdir
+          emptyDir: {}
+        - name: msmtp
+          secret:
+            secretName: {{ template "request-tracker.fullname" . }}-msmtp
+        - name: msmtpworkingdir
+          emptyDir: {}
+        - name: getmail
+          secret:
+            secretName: {{ template "request-tracker.fullname" . }}-getmail
+        - name: getmailworkingdir
+          emptyDir: {}
+        - name: gpg
+          secret:
+            secretName: {{ template "request-tracker.fullname" . }}-gpg
+        - name: gpgworkingdir
+          emptyDir: {}
+        - name: crls
+          configMap:
+            name: {{ template "request-tracker.fullname" . }}-crls
+        - name: crlsworkingdir
+          emptyDir: {}
+        - name: shredder
+          secret:
+            secretName: {{ template "request-tracker.fullname" . }}-shredder
+        - name: shredderworkingdir
+          emptyDir: {}
+        - name: scripts
+          secret:
+            secretName: {{ template "request-tracker.fullname" . }}-scripts
+        - name: scriptsworkingdir
+          emptyDir: {}
+        - name: certs
+          secret:
+            secretName: certs
+        - name: certsworkingdir
+          emptyDir: {}
+        - name: crontab
+          configMap:
+            name: cron
+        - name: crontabworkingdir
+          emptyDir: {}
+        - name: data
+        {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.existingClaim | default "cron" }}
+        {{- else }}
+          emptyDir: {}
+        {{- end }}
+        - name: data-shredder
+        {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.existingClaim | default "shredder" }}
+        {{- else }}
+          emptyDir: {}
+        {{- end -}}

@@ -1,0 +1,22 @@
+apiVersion: v1
+entries:
+  rt:
+  - apiVersion: v1
+    appVersion: latest
+    created: "2023-04-20T12:06:00.365175462-03:00"
+    description: Open implementation of the request-tracker standard based on firefart/requesttracker
+    digest: 9c3d3e1bd621b3a1b96efb0722478077fafe23a6413e717f14605fd72273c7c3
+    home: https://bestpractical.com/request-tracker
+    keywords:
+    - request-tracker
+    maintainers:
+    - name: Danilo Nicioka
+      url: https://github.com/danilonicioka/
+    name: rt
+    sources:
+    - https://github.com/danilonicioka/helm-charts
+    type: application
+    urls:
+    - rt-0.1.1.tgz
+    version: 0.1.1
+generated: "2023-04-20T12:06:00.362408921-03:00"

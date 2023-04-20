@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name:  {{ include "nginx.fullname" . }}
+  labels:
+    app: {{ include "nginx.name" . }}
+    chart: {{ include "nginx.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+{{- if .Values.extraLabels }}
+{{ toYaml .Values.extraLabels | indent 4 }}
+{{- end }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+{{- if .Values.strategy }}
+  strategy:
+{{ toYaml .Values.strategy | indent 4 }}
+{{- end }}
+  selector:
+    matchLabels:
+      app: {{ include "nginx.name" . }}
+      release: {{ .Release.Name }}
+  template:
+    metadata: #todo: add cm checksums as annotation
+{{- if .Values.podAnnotations}}
+{{ toYaml .Values.podAnnotations | indent 8}}
+{{- end }}
+      labels:
+        app: {{ include "nginx.name" . }}
+        release: {{ .Release.Name }}
+    spec:
+      initContainers:
+      - name: {{ .Chart.Name }}-init-certs
+        image: busybox
+        command: ['sh', '-c', 'cp /certs/* /certsworkingdir']
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        volumeMounts:
+        - name: certs
+          mountPath: /certs
+        - name: certsworkingdir
+          mountPath: /certsworkingdir
+      - name: {{ .Chart.Name }}-init-scripts
+        image: busybox
+        command: ['sh', '-c', 'cp /scripts/* /scriptsworkingdir']
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        volumeMounts:
+        - name: scripts
+          mountPath: /scripts
+        - name: scriptsworkingdir
+          mountPath: /scriptsworkingdir
+      - name: {{ .Chart.Name }}-init-conf
+        image: busybox
+        command: ['sh', '-c', 'cp /conf/* /confworkingdir']
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        volumeMounts:
+        - name: conf
+          mountPath: /conf
+        - name: confworkingdir
+          mountPath: /confworkingdir
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          volumeMounts:
+            - name: certsworkingdir
+              mountPath: /certs/
+            - name: scriptsworkingdir
+              mountPath: /docker-entrypoint.d/
+            - name: confworkingdir
+              mountPath: /etc/nginx/conf.d/
+          ports:
+            - name: nginx
+              containerPort: {{ .Values.service.nginxPort }}
+      restartPolicy: Always
+      volumes:
+        - name: certs
+          secret:
+            secretName: {{ include "nginx.fullname" . }}-certs
+        - name: certsworkingdir
+          emptyDir: {}
+        - name: scripts
+          configMap:
+            name: {{ include "nginx.fullname" . }}-scripts
+        - name: scriptsworkingdir
+          emptyDir: {}
+        - name: conf
+          secret:
+            secretName: {{ include "nginx.fullname" . }}-conf
+        - name: confworkingdir
+          emptyDir: {}

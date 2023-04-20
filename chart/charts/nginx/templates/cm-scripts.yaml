@@ -1,0 +1,14 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "nginx.fullname" . }}-scripts
+  labels:
+    app: {{ template "nginx.name" . }}
+    chart: {{ template "nginx.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+
+data:
+{{ (.Files.Glob "files/nginx/startup-scripts/*").AsConfig | indent 2 }}
+...
