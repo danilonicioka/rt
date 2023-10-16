@@ -11,7 +11,7 @@ image:
   repository: firefart/requesttracker
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: nginx-nightly-20230321
+  tag: nginx-nightly-20230710
 
 imagePullSecrets: []
 
@@ -62,4 +62,5 @@ logLevel: debug
 
 service:
   type: ClusterIP
-  nginxPort: 80
+  http: 80
+  https: 443

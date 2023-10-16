@@ -35,10 +35,12 @@ files
           |---mailgate.conf
       |---startup-cripts
           |---script-x.sh
-  |---rt-data
-      |---001.dat
-      |---002.dat
-      |---003.dat
+  |---rt
+      |---data
+          |---001.dat
+          |---002.dat
+          |---003.dat
+          |---rt-serialized
   |---shredder
       |---20220XXX...-XXXX.sql
   |---RT_SiteConfig.pm
@@ -53,7 +55,7 @@ Como o RT é configurado quase que totalmente por próprios arquivos de configur
 
 ### Persistência
 
-```
+```yaml
 persistence:
   enabled: true
   storage: 500Mi
@@ -69,7 +71,7 @@ Em que:
 
 ### Service
 
-```
+```yaml
 service:
   rtPort: 9000
   type: ClusterIP
@@ -83,7 +85,7 @@ OBS: deve-se atentar para qual porta está sendo definida no arquivo de configur
 
 ### Ingress
 
-```
+```yaml
 ingress:
   enabled: true
   className: ""
@@ -106,7 +108,7 @@ Em que:
 
 ### PostgreSQL
 
-```
+```yaml
 postgresql:
   persistence:
     enabled: true
@@ -132,7 +134,7 @@ Em que:
 
 ### Cron
 
-```
+```yaml
 cron:
   persistence:
     enabled: true
@@ -146,85 +148,81 @@ cron:
       storageClass: ""
 ```
 
-## Comandos para configuração
+# Pipeline
+## Deploy
+### RT
+- Realiza o deploy do helm chart no namespace rt
 
-Para facilitar o processo de configuração após organizar todos os arquivos, pode-se utilizar alguns pequenos comandos/scrips listados a seguir:
-
-OBS1: os seguintes passos são para os casos em que já exista uma instância do RT e deseja-se apenas migrá-la ou criar uma outra instância
-OBS2: garantir que todos os pods estejam rodando
-OBS3: devem ser executadas em ordem
-
-
-1. Dados do RT
-
-Caso ainda não tenha os dados de uma instância do RT, basta executar o seguinte comando:
-
-```
-rt-validator --check && rt-serializer --clone
+```bash
+helm upgrade rt . -i -n rt --create-namespace
 ```
 
-Esse comando gerará uma pasta com os dados serializados do RT, logo, é preciso copiá-los para a nova instância.
+## Config
+### DB
 
-Devido à limitação do tamanho do chart, não é possível fazer um mount diretamente, então deve-se realizar essa cópia de forma externa após o pod estar pronto. Isso pode ser feito por meio do comando abaixo:
+- Configura o banco de dados postgres a partir das informações no arquivo `RT_SiteConfig.pm`
 
 ```
-kubectl cp files/rt-data `kubectl get pods --no-headers -o custom-columns=":metadata.name" | grep rt-rt`:/root/
+kubectl exec -n rt `kubectl get pods -o=name -n rt | grep rt-rt` -- bash /custom/postgres/init.sh
 ```
 
-2. Configuração do banco de dados
-
-Antes de importar dados do RT, é preciso configurar o banco de dados de acordo com as informações anteriores para não ocorrer conflitos, ou seja, o nome do banco de dados, o usuário etc devem ser iguais aos utilizados na instância da qual se obteve esses dados.
-
-Para isso, deve-se configurar corretamente o arquivo `RT_SiteConfig.pm` com essas informações. Após isso, pode-se utilizar o executável rt-setup-database para configurar o banco para ficar pronto para receber os dados.
-
-Para facilitar esse processo, pode-se utilizar scripts com os comandos necessários e apenas executá-los, o que evitaria ter que acessar diretamente o container. Esses scripts podem ser configurados no arquivo `values.yaml`. Exemplo:
+OBS: O script utilizado foi configurado no arquivo `values.yaml`:
 
 ```
 scripts:
-  create:
-    perl /opt/rt5/sbin/rt-setup-database --action create,schema,acl --dba-password=123
-  import:
-    perl /opt/rt5/sbin/rt-importer /root/rt-data
+  init:
+    perl /opt/rt5/sbin/rt-setup-database --action init --dba-password=123
 ```
 
 Em que: 
-- `create` e `import` indicarão os comandos dentro dos scripts create.sh e import.sh, respectivamente
-- `dba-password`: senha para acessar o postgresql. OBS: mesma definida no subchart do postgre e no arquivo de configuração `RT_SiteConfig.pm`
+- `init` indica quais os comandos dentro do script init.sh
+- `dba-password`: senha para acessar o postgresql. OBS: mesma definida para o subchart do postgre e no arquivo de configuração `RT_SiteConfig.pm`
 
-Desse modo, após definir a senha correta, pode-se executar os seguintes comandos:
+### Ldap users
 
-```
-kubectl exec -it `kubectl get pods -o=name | grep rt-rt` -- bash /custom/postgres/create.sh
-```
+- Importa os usuários do ldap configurado no arquivo `RT_SiteConfig.pm`
 
 ```
-kubectl exec -it `kubectl get pods -o=name | grep rt-rt` -- bash /custom/postgres/import.sh
+kubectl exec -n rt `kubectl get pods -o=name -n rt | grep rt-rt` -- bash /custom/postgres/ldap.sh
 ```
 
-3. LDAP
+OBS: o script utilizado também foi configurado no arquivo `values.yaml`:
 
-O RT pode importar usuários do LDAP para acessá-lo. Isso é feito por meio do executável rt-ldap-import.
-
-Assim como no passo 2, esse comando pode ser descrito no arquivo `values.yaml` para ser colocado em um script. Exemplo:
-
-```
+```yaml
 scripts:
-    ldap:
-        rt-ldapimport --import --verbose 
+  ...
+  ldap:
+    rt-ldapimport --import --verbose 
 ```
 
-OBS: deve-se verificar se a configuração para conectar ao ldap está corretamente configurada no arquivo RT_SiteConfig.pm
+- Além disso, no final, deleta o pod do rt (forma simples de resetar) para se conectar ao banco de dados agora já configurado
 
-Após isso, basta executar o comando abaixo:
-
-```
-kubectl exec -it `kubectl get pods -o=name | grep rt-rt` -- bash /custom/postgres/ldap.sh
+```bash
+kubectl delete -n rt `kubectl get pods -o=name -n rt | grep rt-rt`
 ```
 
-4. Reiniciar RT
+## Post Config
+### Svc Account
 
-Como o banco de dados foi reconfigurado, é preciso reiniciar o rt para que ele se conecte a esse banco. Para isso, pode-se deletar o pod com o comando abaixo, pois ele será levantado novamente de forma automática:
+Para que os cronjobs consigam acessar os outros pods para executar os scripts, é preciso que tenham um nível de permissão por meio de um service account e uma role associada. Portanto, esse job aplica os arquivos `svcaccount.yaml`, `role.yaml` e `role-binding.yaml` localizados na pasta `templates` para criar uma role e atribuí-la a um svc account por meio de uma role binding.
 
+```bash
+kubectl apply -f templates/role.yaml -n rt
+kubectl apply -f templates/svcaccount.yaml -n rt
+kubectl apply -f templates/role-binding.yaml -n rt
 ```
-kubectl delete `kubectl get pods -o=name | grep rt-rt`
+
+### Cronjobs
+- Adiciona os cronjobs definidos a partir do arquivo `files/cron/crontab` e localizados na pasta `templates/conjobs`.
+
+```bash
+kubectl apply -f templates/cronjobs -n rt
 ```
+
+### Cron
+
+O RT precisa de uma rotina para obter os novos emails recebidos, então devem ser criados cronjobs do k8s configurados a partir do arquivo crontab, ou seja, esse arquivo não é necessário, apenas facilita na configuração desses cronjobs.
+
+Porém, não é possível utilizar apenas os cronjobs, pois são temporários e não seria possível verificar certos recursos que precisam persistir. Por exemplo, os emails devem ser armazenados para que o rt veja se já foram lidos ou são novos, o que é necessário para o funcionamento correto do rt. 
+
+Visto isso, há um deploy de um pod para realizar apenas essa comunicação rt e cronjobs, de modo que os cronjobs executam comandos nesse novo pod periodicamente.

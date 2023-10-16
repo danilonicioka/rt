@@ -66,6 +66,15 @@ spec:
           mountPath: /getmail
         - name: getmailworkingdir
           mountPath: /getmailworkingdir
+      - name: {{ .Chart.Name }}-init-certs
+        image: busybox
+        command: ['sh', '-c', 'cp /certs/* /certsworkingdir']
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        volumeMounts:
+        - name: certs
+          mountPath: /certs
+        - name: certsworkingdir
+          mountPath: /certsworkingdir
       - name: {{ .Chart.Name }}-init-gpg
         image: busybox
         command: ['sh', '-c', 'cp /gpg/* /gpgworkingdir']
@@ -102,6 +111,7 @@ spec:
           mountPath: /scripts
         - name: scriptsworkingdir
           mountPath: /scriptsworkingdir
+      nodeName: node5
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -117,6 +127,8 @@ spec:
               mountPath: /msmtp/
             - name: getmailworkingdir
               mountPath: /getmail/
+            - name: certsworkingdir
+              mountPath: /getmail/certs
             - name: gpgworkingdir
               mountPath: /opt/rt5/var/data/gpg/
             - name: crlsworkingdir
@@ -155,6 +167,11 @@ spec:
           secret:
             secretName: {{ template "request-tracker.fullname" . }}-getmail
         - name: getmailworkingdir
+          emptyDir: {}
+        - name: certs
+          secret:
+            secretName: {{ .Values.ingress.tls.secretName }}
+        - name: certsworkingdir
           emptyDir: {}
         - name: gpg
           secret:

@@ -66,6 +66,15 @@ spec:
           mountPath: /getmail
         - name: getmailworkingdir
           mountPath: /getmailworkingdir
+      - name: {{ .Chart.Name }}-init-certs
+        image: busybox
+        command: ['sh', '-c', 'cp /certs/* /certsworkingdir']
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        volumeMounts:
+        - name: certs
+          mountPath: /certs
+        - name: certsworkingdir
+          mountPath: /certsworkingdir
       - name: {{ .Chart.Name }}-init-gpg
         image: busybox
         command: ['sh', '-c', 'cp /gpg/* /gpgworkingdir']
@@ -93,15 +102,6 @@ spec:
           mountPath: /shredder
         - name: shredderworkingdir
           mountPath: /shredderworkingdir
-      - name: {{ .Chart.Name }}-init-certs
-        image: busybox
-        command: ['sh', '-c', 'cp /certs/* /certsworkingdir']
-        imagePullPolicy: {{ .Values.image.pullPolicy }}
-        volumeMounts:
-        - name: certs
-          mountPath: /certs
-        - name: certsworkingdir
-          mountPath: /certsworkingdir
       - name: {{ .Chart.Name }}-init-crontab
         image: busybox
         command: ['sh', '-c', 'cp /crontab/* /crontabworkingdir']
@@ -112,19 +112,19 @@ spec:
         - name: crontabworkingdir
           mountPath: /crontabworkingdir
       containers:
-        - args:
-            - /usr/sbin/crond
-            - -f
-            - -l
-            - "8"
-          name: {{ .Chart.Name }}
+        - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           volumeMounts:
-            - name: data-shredder
+            - name: data
               mountPath: /opt/rt5/var/data/RT-Shredder/
+              subPath: shredder
             - name: data
               mountPath: /cron
+              subPath: cron
+            - name: data
+              mountPath: /getmail
+              subPath: getmail
             - name: siteconfigworkingdir
               mountPath: /custom/siteconfig
             - name: msmtprcworkingdir
@@ -132,15 +132,15 @@ spec:
             - name: msmtpworkingdir
               mountPath: /msmtp/
             - name: getmailworkingdir
-              mountPath: /getmail/
+              mountPath: /getmail/config
             - name: certsworkingdir
-              mountPath: /getmail/certs/
+              mountPath: /getmail/certs
             - name: gpgworkingdir
               mountPath: /opt/rt5/var/data/gpg/
             - name: crlsworkingdir
               mountPath: /opt/rt5/var/data/gpg/crls.d
             - name: crontabworkingdir
-              mountPath: /var/spool/cron/crontabs/rt/
+              mountPath: /etc/cron.d/
             - name: shredderworkingdir
               mountPath: /custom/shredder
           securityContext:
@@ -148,7 +148,7 @@ spec:
           lifecycle:
             postStart:
               exec:
-                command: ["/bin/sh", "-c", "cp /custom/siteconfig/RT_SiteConfig.pm /opt/rt5/etc/ ; cp /custom/msmtp/msmtp.conf /etc/msmtprc ; cp /custom/shredder/* /opt/rt5/var/data/RT-Shredder/ ; chmod -R rt 0600 /opt/rt5/var/data/gpg/ ; cp /usr/share/zoneinfo/America/Sao_Paulo /etc/localtime"]
+                command: ["/bin/sh", "-c", "cp /custom/siteconfig/RT_SiteConfig.pm /opt/rt5/etc/ ; cp /custom/msmtp/msmtp.conf /etc/msmtprc ; cp /custom/shredder/* /opt/rt5/var/data/RT-Shredder/ ; chmod -R rt 0600 /opt/rt5/var/data/gpg/ ; cp /usr/share/zoneinfo/America/Sao_Paulo /etc/localtime ; chmod 777 -R /getmail"]
       restartPolicy: Always
       volumes:
         - name: siteconfig
@@ -171,6 +171,11 @@ spec:
             secretName: {{ template "request-tracker.fullname" . }}-getmail
         - name: getmailworkingdir
           emptyDir: {}
+        - name: certs
+          secret:
+            secretName: {{ .Values.ingress.tls.secretName }}
+        - name: certsworkingdir
+          emptyDir: {}
         - name: gpg
           secret:
             secretName: {{ template "request-tracker.fullname" . }}-gpg
@@ -191,11 +196,6 @@ spec:
             secretName: {{ template "request-tracker.fullname" . }}-scripts
         - name: scriptsworkingdir
           emptyDir: {}
-        - name: certs
-          secret:
-            secretName: certs
-        - name: certsworkingdir
-          emptyDir: {}
         - name: crontab
           configMap:
             name: cron
@@ -205,13 +205,6 @@ spec:
         {{- if .Values.persistence.enabled }}
           persistentVolumeClaim:
             claimName: {{ .Values.persistence.existingClaim | default "cron" }}
-        {{- else }}
-          emptyDir: {}
-        {{- end }}
-        - name: data-shredder
-        {{- if .Values.persistence.enabled }}
-          persistentVolumeClaim:
-            claimName: {{ .Values.persistence.existingClaim | default "shredder" }}
         {{- else }}
           emptyDir: {}
         {{- end -}}

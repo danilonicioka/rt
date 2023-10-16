@@ -11,7 +11,7 @@ image:
   repository: firefart/requesttracker
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: latest
+  tag: "5.0.4"
 
 imagePullSecrets: []
 
@@ -72,19 +72,30 @@ service:
 
 ingress:
   enabled: true
+  name: rt
   className: nginx
-  host: example.com
-  rt:
-    path: /
-    pathType: Prefix
-    serviceName: rt-nginx
-    servicePort: 80
+  #host: rt-teste.com
+  host: rt.csic.ufpa.br
+  path: /
+  pathType: Prefix
+  serviceName: rt-nginx
+  servicePort: 80
+  tls:
+    enabled: true
+    secretName: tls-rt-ingress
+    clusterissuer: selfsigned-cluster-issuer
 
 scripts:
+  init:
+    perl /opt/rt5/sbin/rt-setup-database --action init --dba-password=g3ntl3m@n.p@ss
+  drop:
+    perl /opt/rt5/sbin/rt-setup-database --action drop --dba-password=g3ntl3m@n.p@ss
   create:
-    perl /opt/rt5/sbin/rt-setup-database --action create,schema,acl --dba-password=123
+    perl /opt/rt5/sbin/rt-setup-database --action create --dba-password=g3ntl3m@n.p@ss
+  clone:
+    perl /opt/rt5/sbin/rt-setup-database --action create,schema,acl --dba-password=g3ntl3m@n.p@ss
   import:
-    perl /opt/rt5/sbin/rt-importer /root/rt-data
+    perl /opt/rt5/sbin/rt-importer /root/data
   ldap:
     rt-ldapimport --import --verbose 
 
@@ -99,9 +110,12 @@ postgresql:
     existingClaim: ""
     storageClass: ""
   postgresql:
-    username: postgres
-    password: 123
+    username: rtuser
+    password: g3ntl3m@n.p@ss
     port: 5432
+  scripts:
+    dump:
+      psql -U rtuser rt < /root/rt-dump.sql
 
 cron:
   persistence:

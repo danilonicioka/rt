@@ -4,7 +4,7 @@
 ##
 image:
   repository: postgres
-  tag: "13"
+  tag: "13.11-bullseye"
   pullPolicy: IfNotPresent
 
   ## Optionally specify an imagePullSecret.

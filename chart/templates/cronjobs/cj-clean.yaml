@@ -1,0 +1,23 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: clean-cronjob
+spec:
+  schedule: "0 0 * * *"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 10
+      template:
+        spec:
+          serviceAccountName: rt
+          containers:
+          - name: getmail-cronjob
+            image: dtzar/helm-kubectl:3.11.2
+            imagePullPolicy: IfNotPresent
+            command:
+            - /bin/sh
+            - -c
+            - kubectl exec -n rt `kubectl get pods -o=name -n rt | grep cron` -- su rt -c '/opt/rt5/sbin/rt-clean-sessions'
+          restartPolicy: Never
+      backoffLimit: 0

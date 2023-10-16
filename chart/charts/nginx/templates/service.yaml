@@ -30,10 +30,14 @@ spec:
 {{ toYaml .Values.service.loadBalancerSourceRanges | indent 4 }}
 {{- end }}
   ports:
-    - name: nginx
+    - name: http
       protocol: TCP
-      port: {{ .Values.service.nginxPort }}
-      targetPort: nginx
+      port: 80
+      targetPort: http
+    - name: https
+      protocol: TCP
+      port: 443
+      targetPort: https
   selector:
     app: {{ include "nginx.name" . }}
     release: {{ .Release.Name }}

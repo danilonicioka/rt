@@ -69,8 +69,12 @@ spec:
             - name: confworkingdir
               mountPath: /etc/nginx/conf.d/
           ports:
-            - name: nginx
-              containerPort: {{ .Values.service.nginxPort }}
+            - name: http
+              containerPort: 80
+              protocol: TCP
+            - name: https
+              containerPort: 443
+              protocol: TCP
       restartPolicy: Always
       volumes:
         - name: certs

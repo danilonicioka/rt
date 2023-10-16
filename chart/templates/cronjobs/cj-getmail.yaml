@@ -1,0 +1,23 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: getmail-cronjob
+spec:
+  schedule: "* * * * *"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 10
+      template:
+        spec:
+          serviceAccountName: rt
+          containers:
+          - name: getmail-cronjob
+            image: dtzar/helm-kubectl:3.11.2
+            imagePullPolicy: IfNotPresent
+            command:
+            - /bin/sh
+            - -c
+            - kubectl exec -n rt `kubectl get pods -o=name -n rt | grep cron` -- su rt -c '/usr/bin/getmail --rcfile=getmailrc -g /getmail/config'
+          restartPolicy: Never
+      backoffLimit: 0
